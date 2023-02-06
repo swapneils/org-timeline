@@ -118,7 +118,7 @@ You will see a rolling 24h cycle, starting `org-timeline-keep-elapsed' hours ago
   :type 'integer
   :group 'org-timeline)
 
-(defcustom org-timeline-insert-before-text "\u275A"
+(defcustom org-timeline-insert-before-text "\u25B6" ;; "\u275A"
   "String inserted before the block's text.
 
 It makes consecutive blocks distinct.
