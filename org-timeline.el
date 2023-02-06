@@ -479,7 +479,7 @@ This does not take the block's context (e.g. overlap) into account."
                     title
                   blank-block)))
     (add-text-properties 0 block-length props block)
-    (substring block 0 block-length)))
+    (substring block 0 (+ block-length (- (apply #'+ (mapcar #'char-width org-timeline-insert-before-text)) (length org-timeline-insert-before-text))))))
 
 (defun org-timeline--make-and-insert-block (task)
   "Insert the TASK's block at the right position in the timeline.
