@@ -432,15 +432,17 @@ Return t if this task will overlap another one when inserted."
               (propertize (concat group-name " " slotline) 'org-timeline-day day 'org-timeline-group-name group-name)))
     ;; cursor is now at beginning of the task's group's first line
     (let ((new-overlap-line-required-flag (org-timeline--new-overlap-line-required-at-point-p task)))
-      (while (and (org-timeline--new-overlap-line-required-at-point-p task)
+      (while (and new-overlap-line-required-flag ;; (org-timeline--new-overlap-line-required-at-point-p task)
                   (eq (get-text-property (point) 'org-timeline-day) day)
-                  (eq (get-text-property (point) 'org-timeline-group-name) group-name)
+                  (equal (get-text-property (point) 'org-timeline-group-name) group-name)
                   (not (eq (line-end-position) (point-max))))
-        (setq new-overlap-line-required-flag t)
-        (forward-line))
+        ;; (setq new-overlap-line-required-flag t)
+        (forward-line)
+        (setq new-overlap-line-required-flag (org-timeline--new-overlap-line-required-at-point-p task)))
       (let ((decorated-slotline (propertize (concat "   " " " slotline)
                                             'org-timeline-day day
-                                            'org-timeline-group-name group-name)))
+                                            'org-timeline-group-name group-name
+                                            'org-timeline-occupied nil)))
         (when new-overlap-line-required-flag
           (end-of-line)
           (insert "\n" decorated-slotline))))
