@@ -249,7 +249,8 @@ The first three chars will be printed at the beginning of the block's line."
   "List of points where an already drawn blocks would overlap with TASK."
   (save-excursion
     (let (overlap-points)
-      (goto-char (+ (line-beginning-position) (org-timeline-task-offset-beg task)))
+      (goto-char (+ (line-beginning-position)
+                    (org-timeline-task-offset-beg task)))
       (while (and (<= (point) (+ (line-beginning-position) (org-timeline-task-offset-end task)))
                  (< (point) (point-max)))
         (when (get-text-property (point) 'org-timeline-occupied)
@@ -384,6 +385,8 @@ WIN is the agenda buffer's window."
                                         (< beg (org-timeline-task-beg org-timeline-next-task))))))
         (when (and is-today (or is-now is-closer-to-now))
           (setq org-timeline-next-task task))))
+    (when org-timeline-next-task
+      (setq org-timeline-next-task-today org-timeline-next-task))
     ;; change the next task's face
     (when (and org-timeline-emphasize-next-block
                org-timeline-next-task)
@@ -635,6 +638,7 @@ See the documentation of `org-timeline-keep-elapsed' for more information."
                   (org-timeline--decorate-info (org-timeline-task-info org-timeline-next-task)))))
       (buffer-string))))
 
+;;;###autoload
 (defun org-timeline-insert-timeline ()
   "Insert graphical timeline into agenda buffer."
   (unless (buffer-narrowed-p)
