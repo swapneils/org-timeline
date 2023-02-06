@@ -413,7 +413,9 @@ Return t if this task will overlap another one when inserted."
                       (mapconcat (lambda (line-day)
                                    (propertize (concat (calendar-day-name (mod line-day 7) t t) ; found in https://github.com/deopurkar/org-timeline
                                                        " "
-                                                       slotline)
+                                                       slotline
+                                                       " "
+                                                       (calendar-date-string (calendar-gregorian-from-absolute line-day) t t))
                                                'org-timeline-day line-day 'org-timeline-group-name "   "))
                                  (if-let ((last-day (get-text-property (line-beginning-position) 'org-timeline-day)))
                                      (number-sequence (+ 1 last-day) day)
