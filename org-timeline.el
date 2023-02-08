@@ -223,7 +223,11 @@ Used when `org-timeline-emphasize-next-block' is non-nil."
         (save-excursion
           (goto-char item-marker)
           (outline-previous-heading)
-          (org-element-property :raw-value (org-element-context)))))))
+          (let* ((heading-text (org-element-property :raw-value (org-element-context)))
+                 (heading-text (replace-regexp-in-string "^\\[\\([0-9]+\\{1,3\\}%\\|[0-9]+/[0-9]+\\)\\] " "" heading-text)))
+            heading-text))
+        ;; (org-last (org-get-outline-path))
+        ))))
 
 (defun org-timeline--get-group-name (type)
   "Get the current block's 'group-name' according to TYPE.
