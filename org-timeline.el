@@ -338,7 +338,9 @@ WIN is the agenda buffer's window."
       (-when-let* ((time-of-day (org-get-at-bol 'time-of-day))
                    (marker (org-get-at-bol 'org-marker))
                    (type (org-get-at-bol 'type))
-                   (duration (org-get-at-bol 'duration)))
+                   (duration (-if-let (duration (org-get-at-bol 'duration))
+                                 duration
+                               10)))
         (when (member type (list "past-scheduled" "scheduled" "clock" "timestamp"))
           (when (and (numberp duration)
                      (< duration 0))
