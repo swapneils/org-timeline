@@ -190,7 +190,8 @@ activated."
    :group 'org-timeline-faces)
 
 (defface org-timeline-next-block
-  '((((class color) (background dark)) (:background "#050"))
+  '((default :weight bold)
+    (((class color) (background dark)) (:background "#050"))
     (((class color) (background light)) (:background "#9f9")))
    "Face used for printing the next block happening today.
 
@@ -205,7 +206,8 @@ Used when `org-timeline-emphasize-priority' is non-nil."
   :group 'org-timeline-faces)
 
 (defface org-timeline-foreground
-  '((((background light)) :foreground "black")
+  '((default :weight bold)
+    (((background light)) :foreground "black")
     (((background dark)) :foreground "white"))
   "Face for the foreground of a block. Added after backgrounds are chosen."
   :group 'org-timeline-faces)
