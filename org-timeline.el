@@ -82,6 +82,10 @@
   :type 'boolean
   :group 'org-timeline)
 
+(defcustom org-timeline-emphasize-priority 'c
+  "Option to apply the face `org-timeline-priority-block' to blocks with priority greater than or equal to the target value. Allows the symbols a, b, and c, as aliases for their corresponding org priorities.")
+(defvar org-timeline-priority-matches '((a . 2000) (b . 1000) (c . 0)))
+
 (defcustom org-timeline-show-text-in-blocks nil
   "Option to show the text of the event in the block.
 
@@ -186,11 +190,25 @@ activated."
    :group 'org-timeline-faces)
 
 (defface org-timeline-next-block
-  '((t (:background "dark olive green")))
+  '((((class color) (background dark)) (:background "#050"))
+    (((class color) (background light)) (:background "#9f9")))
    "Face used for printing the next block happening today.
 
 Used when `org-timeline-emphasize-next-block' is non-nil."
    :group 'org-timeline-faces)
+
+(defface org-timeline-priority-block
+  '((t (:background "#d48")))
+  "Face used for printing blocks with high priority which aren't next.
+
+Used when `org-timeline-emphasize-priority' is non-nil."
+  :group 'org-timeline-faces)
+
+(defface org-timeline-foreground
+  '((((background light)) :foreground "black")
+    (((background dark)) :foreground "white"))
+  "Face for the foreground of a block. Added after backgrounds are chosen."
+  :group 'org-timeline-faces)
 
 
 (defmacro org-timeline-with-each-line (&rest body)
@@ -393,13 +411,35 @@ WIN is the agenda buffer's window."
           (setq org-timeline-next-task task))))
     (when org-timeline-next-task
       (setq org-timeline-next-task-today org-timeline-next-task))
+    ;; change high-priority task faces
+    (when org-timeline-emphasize-priority
+      (let ((threshold (if-let ((pval (alist-get org-timeline-emphasize-priority org-timeline-priority-matches)))
+                           pval
+                         org-timeline-emphasize-priority))
+            (value-matches (map 'list (lambda (c) (cons (cdr c) (car c))) org-timeline-priority-matches)))
+        (dolist (task tasks)
+          (let ((curr-priority (org-get-priority (org-timeline-task-info task))))
+            (when (>= curr-priority threshold)
+              (setf (org-timeline-task-face task)
+                    (remove-if-not #'identity
+                                   (list (if-let ((curr-priority-name (alist-get curr-priority value-matches)))
+                                          (progn
+                                            (message "face %s" curr-priority-name)
+                                            (cons 'background-color
+                                                 (face-attribute (org-get-priority-face (upcase (string-to-char (symbol-name curr-priority-name))))
+                                                                 :foreground)))
+                                        nil)
+                                      'org-timeline-priority-block))))))))
     ;; change the next task's face
     (when (and org-timeline-emphasize-next-block
                org-timeline-next-task)
       (dolist (task tasks)
         (when (eq (org-timeline-task-id task) (org-timeline-task-id org-timeline-next-task))
           (setf (org-timeline-task-face task) (list 'org-timeline-next-block)))))
-  (nreverse tasks)))
+    ;; change the foreground to be more readable
+    (dolist (task tasks)
+      (setf (org-timeline-task-face task) (cons 'org-timeline-foreground (org-timeline-task-face task))))
+    (nreverse tasks)))
 
 (defun org-timeline--goto-block-position (task)
   "Go to TASK's block's line and position cursor in line...
