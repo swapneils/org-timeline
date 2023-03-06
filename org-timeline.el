@@ -418,8 +418,10 @@ WIN is the agenda buffer's window."
                          org-timeline-emphasize-priority))
             (value-matches (map 'list (lambda (c) (cons (cdr c) (car c))) org-timeline-priority-matches)))
         (dolist (task tasks)
-          (let ((curr-priority (org-get-priority (org-timeline-task-info task))))
-            (when (>= curr-priority threshold)
+          (let ((curr-priority (when (string-match org-priority-regexp (org-timeline-task-info task))
+                                 (org-get-priority (org-timeline-task-info task)))))
+            (when (and curr-priority
+                       (>= curr-priority threshold))
               (setf (org-timeline-task-face task)
                     (remove-if-not #'identity
                                    (list (if-let ((curr-priority-name (alist-get curr-priority value-matches)))
