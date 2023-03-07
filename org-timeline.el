@@ -427,11 +427,9 @@ WIN is the agenda buffer's window."
               (setf (org-timeline-task-face task)
                     (remove-if-not #'identity
                                    (list (if-let ((curr-priority-name (alist-get curr-priority value-matches)))
-                                          (progn
-                                            (message "face %s" curr-priority-name)
-                                            (cons 'background-color
-                                                 (face-attribute (org-get-priority-face (upcase (string-to-char (symbol-name curr-priority-name))))
-                                                                 :foreground)))
+                                          (cons 'background-color
+                                                (face-attribute (org-get-priority-face (upcase (string-to-char (symbol-name curr-priority-name))))
+                                                                :foreground))
                                         nil)
                                       'org-timeline-priority-block))))))))
     ;; change the next task's face
