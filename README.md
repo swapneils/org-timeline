@@ -2,7 +2,7 @@
 
 Add graphical view of agenda to agenda buffer.
 
-![Preview](./img/timeline1.png)
+![Preview](./img/timeline2.png)
 
 # Installation
 
@@ -11,6 +11,23 @@ After you install this package from MELPA Stable, add the following line to your
 ``` emacs-lisp
 (add-hook 'org-agenda-finalize-hook 'org-timeline-insert-timeline :append)
 ```
+
+Also, here are some reasonable defaults for configuration options:
+
+``` emacs-lisp
+(setq org-timeline-overlap-in-new-line t
+     org-timeline-emphasize-next-block t
+     org-timeline-beginning-of-day-hour 0
+     org-timeline-keep-elapsed -1
+     org-agenda-span 2
+     org-timeline-show-text-in-blocks t
+     org-timeline-insert-before-text "\u25B6"
+     org-timeline-emphasize-priority 'c
+     )
+(set-face-attribute 'org-timeline-block nil :background "#5555BB")
+```
+
+`
 
 # How it works
 
@@ -49,9 +66,11 @@ You can set up org-timeline and org-agenda so that the timeline will show a roll
 
 Run `org-agenda` in day mode.
 
+## Priority-based highlighting
+By default, blocks are given different colors if they have been given an explicit priority cookie (e.g. "[#A]"). You can change the value `org-timeline-emphasize-priority` to either 'a, 'b, 'c, or a number, to indicate a minimum priority value (below which priority-based coloring will be discarded), or set it to `nil` to deactivate this feature.
+
 # Other details
-You can click on a block, it will take you to the corresponding task in the buffer.
-The info line (just below the timeline) shows the details of the next task to happen. You can hit 'r' outside of the timeline to refresh the agenda and show the next task again.
+The info line (just below the timeline) by default shows the details of the next task to happen, but changes to the most recent block you hovered over. You can hit 'r' outside of the timeline to refresh the agenda and show the next task again.
 
 # TODO
 
