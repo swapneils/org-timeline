@@ -368,6 +368,22 @@ WIN is the agenda buffer's window."
      (goto-line line)
      (search-forward (get-text-property (point) 'time)))) ; makes point more visible to user.
 
+(defun org-timeline--switch-to-task-in-file ()
+  (interactive (list (get-text-property (point) 'task-info)))
+  (let ((target-marker (get-text-property 0 'org-marker task-info)))
+    (let ((target-buffer (marker-buffer target-marker)))
+      (when target-buffer
+        (switch-to-buffer target-buffer)
+        (goto-char (marker-position target-marker))))))
+
+(defun org-timeline--goto-task-in-file (task-info)
+  (interactive (list (get-text-property (point) 'task-info)))
+  (let ((target-marker (get-text-property 0 'org-marker task-info)))
+    (let ((target-buffer (marker-buffer target-marker)))
+      (when target-buffer
+        (pop-to-buffer target-buffer)
+        (goto-char (marker-position target-marker))))))
+
 (defun org-timeline--cursor-sensor-functions (win pt event)
   (interactive)
   (when org-timeline-cursor-sensor
@@ -542,7 +558,12 @@ This does not take the block's context (e.g. overlap) into account."
          (line (org-timeline-task-line-in-agenda-buffer task))
          (group-name (org-timeline-task-group-name task))
          (do-not-overlap (org-timeline-task-do-not-overlap-p task))
-         (move-to-task-map '(keymap mouse-1 . org-timeline--move-to-task-in-agenda-buffer))
+         (move-to-task-map (let ((x (make-sparse-keymap)))
+                             (define-key x (kbd "<mouse-1>") #'org-timeline--move-to-task-in-agenda-buffer)
+                             (define-key x (kbd "<return>") #'org-timeline--switch-to-task-in-file)
+                             (define-key x (kbd "<tab>") #'org-timeline--goto-task-in-file)
+                             (define-key x (kbd "<mouse-2>") (lambda () (org-timeline--goto-block-position task) (org-timeline--goto-task-in-file)))
+                             x))
          (block-length (- offset-end offset-beg))
          (props (list 'font-lock-face face
                       'org-timeline-occupied t
