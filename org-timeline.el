@@ -83,7 +83,8 @@
   :group 'org-timeline)
 
 (defcustom org-timeline-emphasize-priority 'c
-  "Option to apply the face `org-timeline-priority-block' to blocks with priority greater than or equal to the target value. Allows the symbols a, b, and c, as aliases for their corresponding org priorities.")
+  "Option to apply the face `org-timeline-priority-block' to blocks with priority greater than or equal to the target value. Allows the symbols a, b, and c, as aliases for their corresponding org priorities."
+  :group 'org-timeline)
 (defvar org-timeline-priority-matches '((a . 2000) (b . 1000) (c . 0)))
 
 (defcustom org-timeline-show-text-in-blocks nil
@@ -122,13 +123,33 @@ You will see a rolling 24h cycle, starting `org-timeline-keep-elapsed' hours ago
   :type 'integer
   :group 'org-timeline)
 
-(defcustom org-timeline-insert-before-text "\u25B6" ;; "\u275A"
+(defcustom org-timeline-insert-before-text "\u25B6"
   "String inserted before the block's text.
 
 It makes consecutive blocks distinct.
 
-The default value '\u275A' is a heavy vertical bar ❚."
+The default value '\u25B6' is a right-facing triangle ▶."
   :type 'string
+  :group 'org-timeline)
+
+
+(defcustom org-timeline-cursor-sensor t
+  "Option to turn on cursor-sensor-mode in org-agenda detect when the text cursor enters / leaves a block, and run `org-timeline-cursor-entered-functions' or `org-timeline-cursor-left-functions' as appropriate."
+  :type 'boolean
+  :group 'org-timeline)
+
+(setq-default org-timeline-cursor-based-update-just-occurred nil) ;; Ensure that we don't constantly update the info line while the cursor is over a block
+
+(defcustom org-timeline-cursor-entered-functions (list (lambda (w pt)
+                                                      (unless org-timeline-cursor-based-update-just-occurred
+                                                        (save-mark-and-excursion
+                                                          (org-timeline--draw-new-info w (get-text-property (point) 'task-info))
+                                                          (setq org-timeline-cursor-based-update-just-occurred t)))))
+  "Functions to run when the cursor enters a block. Each function should take 2 arguments, the window and the point position"
+  :group 'org-timeline)
+
+(defcustom org-timeline-cursor-left-functions (list (lambda (_ _) (setq org-timeline-cursor-based-update-just-occurred nil)))
+  "Functions to run when the cursor leaves a block. Each function should take 2 arguments, the window and the point position"
   :group 'org-timeline)
 
 (defvar org-timeline-first-line-in-agenda-buffer 0
@@ -347,6 +368,16 @@ WIN is the agenda buffer's window."
      (goto-line line)
      (search-forward (get-text-property (point) 'time)))) ; makes point more visible to user.
 
+(defun org-timeline--cursor-sensor-functions (win pt event)
+  (interactive)
+  (when org-timeline-cursor-sensor
+    (cond
+     ((equal event 'entered) (mapcar (lambda (f) (funcall-interactively f win pt)) org-timeline-cursor-entered-functions))
+     ((equal event 'left) (mapcar (lambda (f) (funcall-interactively f win pt)) org-timeline-cursor-left-functions)))))
+
+(defun org-timeline--cursor-over-block ()
+  (when (member 'org-timeline-block (face-at-point nil t)) t))
+
 (defun org-timeline--list-tasks ()
   "Build the list of tasks to display."
   (let* ((tasks nil)
@@ -431,13 +462,14 @@ WIN is the agenda buffer's window."
                                                 (face-attribute (org-get-priority-face (upcase (string-to-char (symbol-name curr-priority-name))))
                                                                 :foreground))
                                         nil)
-                                      'org-timeline-priority-block))))))))
+                                      'org-timeline-priority-block
+                                      'org-timeline-block))))))))
     ;; change the next task's face
     (when (and org-timeline-emphasize-next-block
                org-timeline-next-task)
       (dolist (task tasks)
         (when (eq (org-timeline-task-id task) (org-timeline-task-id org-timeline-next-task))
-          (setf (org-timeline-task-face task) (list 'org-timeline-next-block)))))
+          (setf (org-timeline-task-face task) (list 'org-timeline-next-block 'org-timeline-block)))))
     ;; change the foreground to be more readable
     (dolist (task tasks)
       (setf (org-timeline-task-face task) (cons 'org-timeline-foreground (org-timeline-task-face task))))
@@ -523,6 +555,7 @@ This does not take the block's context (e.g. overlap) into account."
                       'help-echo (lambda (w obj pos) ; called on block hover
                                    (org-timeline--draw-new-info w info)
                                    info)
+                      'cursor-sensor-functions (list #'org-timeline--cursor-sensor-functions)
                       'org-timeline-task-line line))
          (title (concat org-timeline-insert-before-text
                         (org-timeline-task-text task)
@@ -543,8 +576,8 @@ Changes the block's face according to context."
                      (eq (org-timeline-task-id task) (org-timeline-task-id org-timeline-next-task))
                    nil))
         (block (org-timeline--make-basic-block task)))
-    (when overlapp (setq block (propertize block 'font-lock-face (list 'org-timeline-overlap))))
-    (when is-next (setq block (propertize block 'font-lock-face (list 'org-timeline-next-block))))
+    (when overlapp (setq block (propertize block 'font-lock-face (list 'org-timeline-overlap 'org-timeline-foreground 'org-timeline-block))))
+    (when is-next (setq block (propertize block 'font-lock-face (list 'org-timeline-next-block 'org-timeline-foreground 'org-timeline-block))))
     (unless (get-text-property (- (point) 1) 'org-timeline-overline)
       (add-text-properties 0 (length block)
                            (list 'org-timeline-overline t
@@ -693,6 +726,7 @@ See the documentation of `org-timeline-keep-elapsed' for more information."
 ;;;###autoload
 (defun org-timeline-insert-timeline ()
   "Insert graphical timeline into agenda buffer."
+  (when org-timeline-cursor-sensor (cursor-sensor-mode 1))
   (unless (buffer-narrowed-p)
     (goto-char (point-min))
     (unless org-timeline-prepend
