@@ -181,6 +181,8 @@ The default value '\u25B6' is a right-facing triangle ▶."
   text
   group-name
   do-not-overlap-p ; make sure this block doesn't overlap with any other
+  org-marker
+  org-hd-marker
   )
 
 
@@ -368,7 +370,7 @@ WIN is the agenda buffer's window."
      (goto-line line)
      (search-forward (get-text-property (point) 'time)))) ; makes point more visible to user.
 
-(defun org-timeline--switch-to-task-in-file ()
+(defun org-timeline--switch-to-task-in-file (task-info)
   (interactive (list (get-text-property (point) 'task-info)))
   (let ((target-marker (get-text-property 0 'org-marker task-info)))
     (let ((target-buffer (marker-buffer target-marker)))
@@ -404,6 +406,7 @@ WIN is the agenda buffer's window."
     (org-timeline-with-each-line
       (-when-let* ((time-of-day (org-get-at-bol 'time-of-day))
                    (marker (org-get-at-bol 'org-marker))
+                   (hd-marker (org-get-at-bol 'org-hd-marker))
                    (type (org-get-at-bol 'type))
                    (duration (-if-let (duration (org-get-at-bol 'duration))
                                  duration
@@ -440,6 +443,8 @@ WIN is the agenda buffer's window."
                      :text (org-timeline--get-block-text)
                      :group-name (org-timeline--get-group-name type)
                      :do-not-overlap-p (org-timeline--get-do-not-overlap type)
+                     :org-marker marker
+                     :org-hd-marker hd-marker
                      )
                     tasks)
               (cl-incf id))))))
@@ -560,11 +565,23 @@ This does not take the block's context (e.g. overlap) into account."
          (line (org-timeline-task-line-in-agenda-buffer task))
          (group-name (org-timeline-task-group-name task))
          (do-not-overlap (org-timeline-task-do-not-overlap-p task))
-         (move-to-task-map (let ((x (make-sparse-keymap)))
+         (org-marker (org-timeline-task-org-marker task))
+         (org-hd-marker (org-timeline-task-org-hd-marker task))
+         (move-to-task-map (let ((x (make-sparse-keymap))
+                                 (org-agenda-timeline-todo (lambda ()
+                                                             (interactive)
+                                                             (ignore-errors
+                                                               (goto-line (org-timeline-task-line-in-agenda-buffer task))
+                                                               (let ((inhibit-quit t))
+                                                                 (with-local-quit
+                                                                   (org-agenda-todo))
+                                                                 (org-timeline--goto-block-position task)))))
+                                 (org-timeline-mouse-goto-task-in-file (lambda () (org-timeline--goto-block-position task) (org-timeline--goto-task-in-file))))
                              (define-key x (kbd "<mouse-1>") #'org-timeline--move-to-task-in-agenda-buffer)
                              (define-key x (kbd "<return>") #'org-timeline--switch-to-task-in-file)
                              (define-key x (kbd "<tab>") #'org-timeline--goto-task-in-file)
-                             (define-key x (kbd "<mouse-2>") (lambda () (org-timeline--goto-block-position task) (org-timeline--goto-task-in-file)))
+                             (define-key x (kbd "<mouse-2>") #'org-timeline-mouse-goto-task-in-file)
+                             (define-key x (kbd "t") #'org-agenda-timeline-todo)
                              x))
          (block-length (- offset-end offset-beg))
          (props (list 'font-lock-face face
@@ -579,7 +596,10 @@ This does not take the block's context (e.g. overlap) into account."
                                    (org-timeline--draw-new-info w info)
                                    info)
                       'cursor-sensor-functions (list #'org-timeline--cursor-sensor-functions)
-                      'org-timeline-task-line line))
+                      'org-timeline-task-line line
+                      'org-marker org-marker
+                      'org-hd-marker org-hd-marker
+                      ))
          (title (concat org-timeline-insert-before-text
                         (org-timeline-task-text task)
                         blank-block))
