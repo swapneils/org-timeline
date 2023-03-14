@@ -455,8 +455,9 @@ WIN is the agenda buffer's window."
              (is-after (> beg current-time))
              (is-closer-to-now (and is-after
                                     (or (eq org-timeline-next-task nil)
-                                        (< beg (org-timeline-task-beg org-timeline-next-task))))))
-        (when (and is-today (or is-now is-closer-to-now))
+                                        (< beg (org-timeline-task-beg org-timeline-next-task)))))
+             (is-clocked (string= "clock" (org-timeline-task-type task))))
+        (when (and is-today (or is-now is-closer-to-now) (not is-clocked))
           (setq org-timeline-next-task task))))
     (when org-timeline-next-task
       (setq org-timeline-next-task-today org-timeline-next-task))
@@ -473,22 +474,23 @@ WIN is the agenda buffer's window."
                        (>= curr-priority threshold))
               (setf (org-timeline-task-face task)
                     (remove-if-not #'identity
-                                   (list (if-let ((curr-priority-name (alist-get curr-priority value-matches)))
-                                          (cons 'background-color
-                                                (face-attribute (org-get-priority-face (upcase (string-to-char (symbol-name curr-priority-name))))
-                                                                :foreground))
-                                        nil)
-                                      'org-timeline-priority-block
-                                      'org-timeline-block))))))))
+                                   (concatenate 'list
+                                    (list (if-let ((curr-priority-name (alist-get curr-priority value-matches)))
+                                           (cons 'background-color
+                                                 (face-attribute (org-get-priority-face (upcase (string-to-char (symbol-name curr-priority-name))))
+                                                                 :foreground))
+                                         nil)
+                                       'org-timeline-priority-block)
+                                    (org-timeline-task-face task)))))))))
     ;; change the next task's face
     (when (and org-timeline-emphasize-next-block
                org-timeline-next-task)
       (dolist (task tasks)
         (when (eq (org-timeline-task-id task) (org-timeline-task-id org-timeline-next-task))
-          (setf (org-timeline-task-face task) (list 'org-timeline-next-block 'org-timeline-block)))))
+          (setf (org-timeline-task-face task) (cons 'org-timeline-next-block (org-timeline-task-face task))))))
     ;; change the foreground to be more readable
     (dolist (task tasks)
-      (setf (org-timeline-task-face task) (cons 'org-timeline-foreground (org-timeline-task-face task))))
+      (setf (org-timeline-task-face task) (concatenate 'list (org-timeline-task-face task) '(org-timeline-foreground))))
     (nreverse tasks)))
 
 (defun org-timeline--goto-block-position (task)
