@@ -207,13 +207,13 @@ activated."
 
 (defface org-timeline-overlap
   '((t (:background "dark red")))
-   "Face used for printing overlapping blocks."
-   :group 'org-timeline-faces)
+  "Face used for printing overlapping blocks."
+  :group 'org-timeline-faces)
 
 (defface org-timeline-next-block
   '((default :weight bold)
-    (((class color) (background dark)) (:background "#050"))
-    (((class color) (background light)) (:background "#9f9")))
+    (((background dark)) :background "#050" :foreground "#0ff")
+    (((background light)) :background "#9f9" :foreground "#044"))
    "Face used for printing the next block happening today.
 
 Used when `org-timeline-emphasize-next-block' is non-nil."
@@ -252,7 +252,7 @@ Used when `org-timeline-emphasize-priority' is non-nil."
             (list :background read-face)
           read-face))
     (if (string= type "clock")
-        (list 'org-timeline-clocked)
+        (list 'org-timeline-clocked 'org-timeline-block)
       (list 'org-timeline-block))))
 
 (defun org-timeline--get-block-text ()
@@ -599,8 +599,8 @@ Changes the block's face according to context."
                      (eq (org-timeline-task-id task) (org-timeline-task-id org-timeline-next-task))
                    nil))
         (block (org-timeline--make-basic-block task)))
-    (when overlapp (setq block (propertize block 'font-lock-face (list 'org-timeline-overlap 'org-timeline-foreground 'org-timeline-block))))
-    (when is-next (setq block (propertize block 'font-lock-face (list 'org-timeline-next-block 'org-timeline-foreground 'org-timeline-block))))
+    (when overlapp (setq block (propertize block 'font-lock-face (list 'org-timeline-overlap 'org-timeline-block 'org-timeline-foreground))))
+    (when is-next (setq block (propertize block 'font-lock-face (list 'org-timeline-next-block 'org-timeline-block 'org-timeline-foreground))))
     (unless (get-text-property (- (point) 1) 'org-timeline-overline)
       (add-text-properties 0 (length block)
                            (list 'org-timeline-overline t
