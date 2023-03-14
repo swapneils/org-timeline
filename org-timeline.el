@@ -568,7 +568,7 @@ This does not take the block's context (e.g. overlap) into account."
          (org-marker (org-timeline-task-org-marker task))
          (org-hd-marker (org-timeline-task-org-hd-marker task))
          (move-to-task-map (let ((x (make-sparse-keymap))
-                                 (org-agenda-timeline-todo (lambda ()
+                                 (org-timeline-agenda-todo (lambda ()
                                                              (interactive)
                                                              (ignore-errors
                                                                (goto-line (org-timeline-task-line-in-agenda-buffer task))
@@ -581,7 +581,7 @@ This does not take the block's context (e.g. overlap) into account."
                              (define-key x (kbd "<return>") #'org-timeline--switch-to-task-in-file)
                              (define-key x (kbd "<tab>") #'org-timeline--goto-task-in-file)
                              (define-key x (kbd "<mouse-2>") #'org-timeline-mouse-goto-task-in-file)
-                             (define-key x (kbd "t") #'org-agenda-timeline-todo)
+                             (define-key x (kbd "t") org-timeline-agenda-todo)
                              x))
          (block-length (- offset-end offset-beg))
          (props (list 'font-lock-face face
