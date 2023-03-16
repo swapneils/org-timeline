@@ -579,6 +579,7 @@ This does not take the block's context (e.g. overlap) into account."
                                  (org-timeline-mouse-goto-task-in-file (lambda () (org-timeline--goto-block-position task) (org-timeline--goto-task-in-file))))
                              (define-key x (kbd "<mouse-1>") #'org-timeline--move-to-task-in-agenda-buffer)
                              (define-key x (kbd "<return>") #'org-timeline--switch-to-task-in-file)
+                             (define-key x (kbd "S-<return>") #'org-timeline--move-to-task-in-agenda-buffer)
                              (define-key x (kbd "<tab>") #'org-timeline--goto-task-in-file)
                              (define-key x (kbd "<mouse-2>") #'org-timeline-mouse-goto-task-in-file)
                              (define-key x (kbd "t") org-timeline-agenda-todo)
