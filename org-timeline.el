@@ -514,12 +514,20 @@ Return t if this task will overlap another one when inserted."
     (unless (eq (get-text-property (point) 'org-timeline-day) day)
       (insert (concat "\n" ; creating the necessary lines, up to the current task's day
                       (mapconcat (lambda (line-day)
-                                   (propertize (concat (calendar-day-name (mod line-day 7) t t) ; found in https://github.com/deopurkar/org-timeline
-                                                       " "
-                                                       slotline
-                                                       " "
-                                                       (calendar-date-string (calendar-gregorian-from-absolute line-day) t t))
-                                               'org-timeline-day line-day 'org-timeline-group-name "   "))
+                                   (let* ((line-date (calendar-gregorian-from-absolute line-day))
+                                          (is-today (equal line-date (calendar-current-date)))
+                                          (today-face '(:inherit 'secondary-selection :weight bold :underline t :overline t)))
+                                     (propertize
+                                      (concat
+                                       (propertize (calendar-day-name (mod line-day 7) t t)
+                                                   'face (if is-today today-face nil)) ; found in https://github.com/deopurkar/org-timeline
+                                       " "
+                                       slotline
+                                       " "
+                                       (propertize (calendar-date-string line-date t t)
+                                                   'face (if is-today today-face nil)))
+                                      'org-timeline-day line-day
+                                      'org-timeline-group-name "   ")))
                                  (if-let ((last-day (get-text-property (line-beginning-position) 'org-timeline-day)))
                                      (number-sequence (+ 1 last-day) day)
                                    (list day))
