@@ -416,11 +416,17 @@ WIN is the agenda buffer's window."
                    (type (org-get-at-bol 'type))
                    (duration (-if-let (duration (org-get-at-bol 'duration))
                                  duration
-                               10)))
+                               (if (and (string= type "clock")
+                                       (find-if (lambda (ov) (equal (overlay-get ov 'face) 'org-agenda-clocking))
+                                                (overlays-at (point) (point))))
+                                   'current-clock
+                                 10))))
+        (when (eq duration 'current-clock) (setq duration nil))
         (when (member type (list "past-scheduled" "scheduled" "clock" "timestamp"))
           (when (and (numberp duration)
                      (< duration 0))
             (cl-incf duration 1440))
+          (unless duration (message "task without duration: %s" (buffer-substring (line-beginning-position) (line-end-position))))
           (let* ((hour (/ time-of-day 100))
                  (minute (mod time-of-day 100))
                  (still-drawing t)
