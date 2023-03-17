@@ -438,7 +438,7 @@ WIN is the agenda buffer's window."
                  (init-beg (+ (* hour 60) minute))
                  (init-end (if duration
                                (round (+ init-beg duration))
-                             current-time))
+                             (+ current-time (* 60 24 (- (time-to-days (current-time)) day)))))
                  (beg (max init-beg start-offset))
                  (duration (- init-end beg))
 
