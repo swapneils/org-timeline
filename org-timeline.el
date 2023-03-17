@@ -526,7 +526,9 @@ Return t if this task will overlap another one when inserted."
          (offset-end (org-timeline-task-offset-end task))
          (day (org-timeline-task-day task))
          (group-name (org-timeline-task-group-name task))
-         (do-not-overlap (org-timeline-task-do-not-overlap-p task)))
+         (do-not-overlap (org-timeline-task-do-not-overlap-p task))
+         (is-today (= day (time-to-days (current-time))))
+         (today-face '(:inherit secondary-selection :weight bold :underline t :overline t)))
     (goto-char 1)
     (while (and (not (eq (get-text-property (point) 'org-timeline-day) day))
                 (not (eq (forward-line) 1))))
@@ -534,8 +536,7 @@ Return t if this task will overlap another one when inserted."
       (insert (concat "\n" ; creating the necessary lines, up to the current task's day
                       (mapconcat (lambda (line-day)
                                    (let* ((line-date (calendar-gregorian-from-absolute line-day))
-                                          (is-today (equal line-date (calendar-current-date)))
-                                          (today-face '(:inherit 'secondary-selection :weight bold :underline t :overline t)))
+                                          (is-today (equal line-date (calendar-current-date))))
                                      (propertize
                                       (concat
                                        (propertize (calendar-day-name (mod line-day 7) t t)
@@ -559,7 +560,9 @@ Return t if this task will overlap another one when inserted."
       (when (not (eq (line-end-position) (point-max))) (forward-line -1))
       (goto-char (line-end-position))
       (insert "\n"
-              (propertize (concat group-name " " slotline) 'org-timeline-day day 'org-timeline-group-name group-name)))
+              (propertize (concat (propertize group-name 'face (when is-today today-face)) " " slotline)
+                          'org-timeline-day day
+                          'org-timeline-group-name group-name)))
     ;; cursor is now at beginning of the task's group's first line
     (let ((new-overlap-line-required-flag (org-timeline--new-overlap-line-required-at-point-p task)))
       (while (and new-overlap-line-required-flag ;; (org-timeline--new-overlap-line-required-at-point-p task)
