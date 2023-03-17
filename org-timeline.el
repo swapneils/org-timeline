@@ -123,6 +123,11 @@ You will see a rolling 24h cycle, starting `org-timeline-keep-elapsed' hours ago
   :type 'integer
   :group 'org-timeline)
 
+(defcustom org-timeline-default-duration 10
+  "The duration used to display timeline blocks that don't already have a duration. Set to nil to hide these blocks"
+  :type 'integer
+  :group 'org-timeline)
+
 (defcustom org-timeline-insert-before-text "\u25B6"
   "String inserted before the block's text.
 
@@ -420,7 +425,7 @@ WIN is the agenda buffer's window."
                                        (find-if (lambda (ov) (equal (overlay-get ov 'face) 'org-agenda-clocking))
                                                 (overlays-at (point) (point))))
                                    'current-clock
-                                 10))))
+                                 org-timeline-default-duration))))
         (when (eq duration 'current-clock) (setq duration nil))
         (when (member type (list "past-scheduled" "scheduled" "clock" "timestamp"))
           (when (and (numberp duration)
