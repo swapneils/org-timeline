@@ -572,8 +572,11 @@ Return t if this task will overlap another one when inserted."
       (let ((decorated-slotline (propertize (concat "   " " " slotline)
                                             'org-timeline-day day
                                             'org-timeline-group-name group-name
-                                            'org-timeline-occupied nil)))
-        (when new-overlap-line-required-flag
+                                            'org-timeline-occupied nil))
+            (group-conflict (not (string= (-if-let (group-here (get-text-property (point) 'org-timeline-group-name)) group-here group-name) group-name))))
+        (when (or new-overlap-line-required-flag
+                  (and group-conflict
+                       (progn (forward-line -1) t)))
           (end-of-line)
           (insert "\n" decorated-slotline))))
     ;; cursor is now placed on the right line, at the right position.
