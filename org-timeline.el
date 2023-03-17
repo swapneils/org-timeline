@@ -399,12 +399,18 @@ WIN is the agenda buffer's window."
 (defun org-timeline--list-tasks ()
   "Build the list of tasks to display."
   (let* ((tasks nil)
+         (max-day 0)
          (id 0)
          (start-offset (* org-timeline-beginning-of-day-hour 60))
+         (end-offset (+ start-offset (* 24 60)))
          (current-time (+ (* 60 (string-to-number (format-time-string "%H")))
                           (string-to-number (format-time-string "%M")))))
     (org-timeline-with-each-line
-      (-when-let* ((time-of-day (org-get-at-bol 'time-of-day))
+      (-when-let (day (org-get-at-bol 'day))
+        (setq max-day (max max-day day))))
+    (org-timeline-with-each-line
+      (-when-let* ((day (org-get-at-bol 'day))
+                   (time-of-day (org-get-at-bol 'time-of-day))
                    (marker (org-get-at-bol 'org-marker))
                    (hd-marker (org-get-at-bol 'org-hd-marker))
                    (type (org-get-at-bol 'type))
@@ -417,18 +423,22 @@ WIN is the agenda buffer's window."
             (cl-incf duration 1440))
           (let* ((hour (/ time-of-day 100))
                  (minute (mod time-of-day 100))
-                 (beg (+ (* hour 60) minute))
-                 (end (if duration
-                          (round (+ beg duration))
-                        current-time)))
-            (setq beg (max beg start-offset))
-            (setq end (min end (+ start-offset (* 24 60))))
-            (setq duration (- end beg))
-            (when (eq end (* 24 60)) (cl-incf end -1)) ; FIXME fixes a bug that shouldn't happen (crash when events end at midnight).
-            (when (and (>= end start-offset)
-                       (<= beg (+ start-offset (* 24 60)))
-                       (or org-timeline-show-clocked
-                           (not (string= type "clock"))))
+                 (still-drawing t)
+                 (init-beg (+ (* hour 60) minute))
+                 (init-end (if duration
+                               (round (+ init-beg duration))
+                             current-time))
+                 (beg (max init-beg start-offset))
+                 (duration (- init-end beg))
+
+                 (end (min init-end end-offset)))
+            (while (and (>= end start-offset)
+                        (<= beg end-offset)
+                        (or org-timeline-show-clocked
+                            (not (string= type "clock")))
+                        (<= day max-day)
+                        still-drawing)
+              (when (eq end (* 24 60)) (cl-incf end -1)) ; FIXME fixes a bug that shouldn't happen (crash when events end at midnight).
               (push (make-org-timeline-task
                      :id id
                      :beg beg
@@ -438,7 +448,7 @@ WIN is the agenda buffer's window."
                      :info (buffer-substring (line-beginning-position) (line-end-position))
                      :line-in-agenda-buffer (line-number-at-pos)
                      :face (org-timeline--get-face type)
-                     :day (org-get-at-bol 'day)
+                     :day day
                      :type type
                      :text (org-timeline--get-block-text)
                      :group-name (org-timeline--get-group-name type)
@@ -447,6 +457,15 @@ WIN is the agenda buffer's window."
                      :org-hd-marker hd-marker
                      )
                     tasks)
+              (if (> init-end end-offset)
+                  (progn
+                    (cl-incf day)
+                    (cl-decf duration (- end beg))
+                    (setq init-beg 0)
+                    (setq beg (max init-beg start-offset))
+                    (setq init-end (+ beg duration))
+                    (setq end (min init-end end-offset)))
+                  (setq still-drawing nil))
               (cl-incf id))))))
     ;; find the next task
     (setq org-timeline-next-task nil)
