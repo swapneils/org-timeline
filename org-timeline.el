@@ -572,8 +572,8 @@ WIN is the agenda buffer's window."
             (when (and curr-priority
                        (>= curr-priority threshold))
               (setf (org-timeline-task-face task)
-                    (remove-if-not #'identity
-                                   (concatenate 'list
+                    (cl-remove-if-not #'identity
+                                   (cl-concatenate 'list
                                     (list (if-let ((curr-priority-name (alist-get curr-priority value-matches)))
                                            (cons 'background-color
                                                  (face-attribute (org-get-priority-face (upcase (string-to-char (symbol-name curr-priority-name))))
@@ -589,7 +589,7 @@ WIN is the agenda buffer's window."
           (setf (org-timeline-task-face task) (cons 'org-timeline-next-block (org-timeline-task-face task))))))
     ;; change the foreground to be more readable
     (dolist (task tasks)
-      (setf (org-timeline-task-face task) (concatenate 'list (org-timeline-task-face task) '(org-timeline-foreground))))
+      (setf (org-timeline-task-face task) (cl-concatenate 'list (org-timeline-task-face task) '(org-timeline-foreground))))
     (dolist (task tasks)
       (when-let ((filter-func (lambda (x)
                                 (let ((deprop x))
