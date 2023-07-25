@@ -705,6 +705,15 @@ This does not take the block's context (e.g. overlap) into account."
                                                                 (with-local-quit
                                                                   (org-agenda-clock-in))
                                                                 (org-timeline--goto-block-position task))))))
+                                 (org-timeline-clock-out (lambda ()
+                                                          (interactive)
+                                                          (save-excursion
+                                                            (ignore-errors
+                                                              (goto-line (org-timeline-task-line-in-agenda-buffer task))
+                                                              (let ((inhibit-quit t))
+                                                                (with-local-quit
+                                                                  (org-agenda-clock-out))
+                                                                (org-timeline--goto-block-position task))))))
                                  (org-timeline-agenda-redo (lambda ()
                                                              (interactive)
                                                              (let ((pos (point)))
@@ -721,6 +730,7 @@ This does not take the block's context (e.g. overlap) into account."
                              (define-key x (kbd "<mouse-2>") #'org-timeline-mouse-goto-task-in-file)
                              (define-key x (kbd "t") org-timeline-agenda-todo)
                              (define-key x (kbd "I") org-timeline-clock-in)
+                             (define-key x (kbd "O") org-timeline-clock-out)
                              (define-key x (kbd "r") org-timeline-agenda-redo)
                              x))
          (block-length (- offset-end offset-beg))
