@@ -78,3 +78,95 @@ The info line (just below the timeline) by default shows the details of the next
 - [X] Make "midnight"/change-of-day configurable (currently 5 AM)
 - [X] Add a tooltip showing the task description/name
 - [X] Make the blocks navigable to the task
+
+
+# My org-timeline config
+(This config is implemented in Doom Emacs, but is hopefully clear enough to port to other systems)
+
+``` emacs-lisp
+(use-package! org-timeline
+  :after org-agenda
+  :config
+  (defun org-timeline-get-priority-face (task)
+    (if-let ((value-matches (mapcar (lambda (c) (cons (cdr c) (car c))) org-timeline-priority-matches))
+             (curr-priority (when (string-match org-priority-regexp (org-timeline-task-info task))
+                              (org-get-priority (org-timeline-task-info task))))
+             (curr-priority-name (alist-get curr-priority value-matches))
+             (curr-priority-face (face-attribute (org-get-priority-face (upcase (string-to-char (symbol-name curr-priority-name))))
+                                                 :foreground)))
+        curr-priority-face))
+  (defface org-timeline-faded-face '((t :background "#373b45" :foreground "#575b65"))
+    "Face for fading out blocks")
+  (custom-set-faces!
+    ;; (list 'org-timeline-clocked-default-task-face (face-default-spec 'org-timeline-clocked))
+    (list 'org-timeline-clocked '(t (:background "#626"))))
+  (setq! ;; org-timeline-start-hour 0
+   org-timeline-overlap-in-new-line t
+   org-timeline-emphasize-next-block t
+   org-timeline-beginning-of-day-hour 0
+   org-timeline-keep-elapsed -1
+   org-agenda-span 2
+   org-timeline-show-text-in-blocks t
+   org-timeline-insert-before-text "\u25B6"
+   org-timeline-emphasize-priority 0
+   org-timeline-show-clocked t
+   org-timeline-dedicated-clocked-line t
+   org-timeline-cursor-sensor t
+   org-timeline-default-duration 10
+   org-timeline-tag-faces (list
+                           "defaultclock" (lambda (bl task)
+                                            (when-let ((bl-face (get-text-property 0 'font-lock-face bl))
+                                                       (clocked-p (member 'org-timeline-clocked bl-face)))
+                                              (add-text-properties 0 (length bl)
+                                                                   (list 'font-lock-face
+                                                                      (cons 'org-timeline-faded-face bl-face))
+                                                                   bl))
+                                            bl)
+                           "meeting" (lambda (bl task)
+                                       (let ((orig-foreground (with-temp-buffer
+                                                     (insert bl)
+                                                     (goto-char 0)
+                                                     (foreground-color-at-point))))
+                                         (add-text-properties 0 (length bl)
+                                                              (list 'font-lock-face
+                                                                 (cons '(:weight bold :background "#000" :foreground "#fff") (get-text-property 0 'font-lock-face bl)))
+                                                              bl)
+                                         (if-let ((curr-priority-face (org-timeline-get-priority-face task)))
+                                          (add-text-properties 0 1
+                                                               (list 'font-lock-face
+                                                                  (cons `(:foreground ,curr-priority-face)
+                                                                        (get-text-property 0 'font-lock-face bl)))
+                                                               bl)))
+                                       ;; (let* ((orig (get-text-property 0 'font-lock-face bl))
+                                       ;;       (start-back (plist-get orig :background)))
+                                       ;;   (message "orig %s" orig)
+                                       ;;   (add-text-properties 0 (length bl)
+                                       ;;                        (list 'font-lock-face
+                                       ;;                           (cons '(:weight bold :background "#000" :foreground "#fff") (get-text-property 0 'font-lock-face bl)))
+                                       ;;                        bl)
+                                       ;;   (when start-back
+                                       ;;     (message "start-back %s")
+                                       ;;     (add-text-properties 0 1
+                                       ;;                          (list 'font-lock-face
+                                       ;;                             (cons (list ':foreground start-back) (get-text-property 0 'font-lock-face bl)))
+                                       ;;                          bl)))
+                                       bl)))
+  (defun org-agenda-timeline-todo (&optional arg)
+    (if (get-text-property)))
+  (add-hook 'org-agenda-finalize-hook 'org-timeline-insert-timeline :append)
+  (custom-set-faces!
+    '(org-timeline-block :background "#5555BB")
+    '(org-timeline-next-block
+      :background "#050"
+      :foreground "#0ff"
+      :weight bold)
+    '(org-timeline-clocked :background "#333" :foreground "#fdd"))
+
+  ;; Doesn't work
+  ;; (after! better-jumper
+  ;;   (defadvice! org-timeline--move-to-task-in-agenda-push-to-better-jumper (&rest _)
+  ;;     :before #'org-timeline--move-to-task-in-agenda-buffer
+  ;;     (better-jumper--push)))
+  )
+```
+
