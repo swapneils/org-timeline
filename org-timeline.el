@@ -87,6 +87,12 @@
   :group 'org-timeline)
 (defvar org-timeline-priority-matches '((a . 2000) (b . 1000) (c . 0)))
 
+(defcustom org-timeline-tag-faces nil
+  "Optional plist to set faces based on certain tags. Overrides the default and priority-based formatting.
+Tags are read in reverse order (tags earlier in the element's tag list are applied later, overriding tags later in the list).
+Set a tag to a function taking propertized text and a task object and returning propertized text to directly manipulate the block (be careful not to change properties which might interfere with the timeline, such as length!)."
+  :group 'org-timeline)
+
 (defcustom org-timeline-show-text-in-blocks nil
   "Option to show the text of the event in the block.
 
@@ -124,9 +130,11 @@ You will see a rolling 24h cycle, starting `org-timeline-keep-elapsed' hours ago
   :group 'org-timeline)
 
 (defcustom org-timeline-default-duration 10
-  "The duration used to display timeline blocks that don't already have a duration. Set to nil to hide these blocks"
+  "The duration used to display timeline blocks that don't already have a duration. Set to nil to hide these blocks. Should otherwise be greater than org-timeline-minimum-duration"
   :type 'integer
   :group 'org-timeline)
+
+(defconst org-timeline-minimum-duration 10 "The minimum duration of a timeline block. Used to upscale ones that are too small.")
 
 (defcustom org-timeline-insert-before-text "\u25B6"
   "String inserted before the block's text.
@@ -188,6 +196,7 @@ The default value '\u25B6' is a right-facing triangle ▶."
   do-not-overlap-p ; make sure this block doesn't overlap with any other
   org-marker
   org-hd-marker
+  tags
   )
 
 
@@ -210,6 +219,16 @@ have an active timestamp with a range."
 
 Clocked blocks appear in the agenda when `org-agenda-log-mode' is
 activated."
+  :group 'org-timeline-faces)
+
+(defface org-timeline-clock-unelapsed
+  '((t (:background "#404040")))
+  "Face used for the unelapsed portions of clock lines"
+  :group 'org-timeline-faces)
+
+(defface org-timeline-clock-elapsed
+  '((t (:inherit region :background "#3b3f49")))
+  "Face used for highlighting elapsed portion of clock lines."
   :group 'org-timeline-faces)
 
 (defface org-timeline-overlap
@@ -293,7 +312,8 @@ The first three chars will be printed at the beginning of the block's line."
   "Whether the current block is allowed to  overlap in the timeline according to TYPE."
   (--if-let (org-entry-get (org-get-at-bol 'org-marker) "TIMELINE_DO_NOT_OVERLAP" t)
       it
-    (if (and (not (string= type "clock")) org-timeline-overlap-in-new-line)
+    (if (and ;; (not (string= type "clock"))
+            org-timeline-overlap-in-new-line)
         t
       nil)))
 
@@ -319,7 +339,7 @@ The first three chars will be printed at the beginning of the block's line."
          (or (org-timeline-task-do-not-overlap-p task)
              (not (eq overlapping-blocks-that-do-not-overlap nil))))))
 
-(defun org-timeline--add-elapsed-face (string)
+(defun org-timeline--add-elapsed-face (string &optional group-name day)
   "Add `org-timeline-elapsed' to STRING's elapsed portion.
 
 Return new copy of STRING."
@@ -330,6 +350,9 @@ Return new copy of STRING."
          (current-offset (/ (- current-time start-offset) 10)))
     (when (< 0 current-offset)
       (put-text-property 0 (+ 1 current-offset) 'font-lock-face (list 'org-timeline-elapsed) string-copy))
+    (when (and group-name (string-match-p (regexp-quote "  $") group-name))
+      (put-text-property 0 (length string-copy) 'font-lock-face (list 'org-timeline-clock-unelapsed) string-copy)
+      (put-text-property 0 (+ 1 current-offset) 'font-lock-face (list 'org-timeline-clock-elapsed) string-copy))
     string-copy))
 
 (defun org-timeline--kill-info ()
@@ -415,69 +438,110 @@ WIN is the agenda buffer's window."
         (setq max-day (max max-day day))))
     (org-timeline-with-each-line
       (-when-let* ((day (org-get-at-bol 'day))
-                   (time-of-day (org-get-at-bol 'time-of-day))
+                   (time-of-day (or (org-get-at-bol 'time-of-day) 'no-time
+                                    ))
                    (marker (org-get-at-bol 'org-marker))
                    (hd-marker (org-get-at-bol 'org-hd-marker))
                    (type (org-get-at-bol 'type))
+                   (dotimes (-if-let (dotime (org-get-at-bol 'dotime)) dotime ""))
+                   (dt (if dotimes dotimes ""))
+                   (day-append (-if-let* ((days (org-get-at-bol 'org-day-cnt))
+                                         (stringdt (stringp dt))
+                                         (norepeat (not (string-match-p (regexp-quote "+") dt)))
+                                         (daycount (> days 1))
+                                         (end-time (-when-let* ((isstring (stringp dt))
+                                                                (end-idx (string-match-p "<\\(.*:.*\\)$" dt))
+                                                                (end-str (concat (substring dt end-idx) ">")))
+                                                     (org-get-time-of-day end-str)))
+                                         (day-duration (-if-let* ((tod (if (numberp time-of-day) time-of-day 0))
+                                                                  (upper (- (truncate (/ end-time 100)) (truncate (/ tod 100))))
+                                                                  (lower (- (% end-time 100) (% tod 100)))
+                                                                  (overlap (truncate (/ lower 60)))
+                                                                  (lower (- lower (* 60 overlap))))
+                                                           (+ (* 60 upper) (* 60 overlap) lower))))
+                                  (* (max 0 (1- days)) (* 60 24))
+                                0))
                    (duration (-if-let (duration (org-get-at-bol 'duration))
-                                 duration
+                                 (if (string= type "clock") (+ duration day-append) duration)
                                (if (and (string= type "clock")
                                        (find-if (lambda (ov) (equal (overlay-get ov 'face) 'org-agenda-clocking))
                                                 (overlays-at (point) (point))))
                                    'current-clock
-                                 org-timeline-default-duration))))
+                                 (-if-let* ((gate nil)
+                                            (days (org-get-at-bol 'org-day-cnt))
+                                            (stringdt (stringp dt))
+                                            (norepeat (not (string-match-p (regexp-quote "+") dt)))
+                                            (daycount (> days 1))
+                                            (end-time (-when-let* ((end-idx (string-match-p "<\\(.*:.*\\)$" dt))
+                                                                   (end-str (concat (substring dt end-idx) ">")))
+                                                        (org-get-time-of-day end-str)))
+                                            (day-duration (-if-let* ((tod (if (numberp time-of-day) time-of-day 0))
+                                                                     (upper (- (truncate (/ end-time 100)) (truncate (/ tod 100))))
+                                                                     (lower (- (% end-time 100) (% tod 100)))
+                                                                     (overlap (truncate (/ lower 60)))
+                                                                     (lower (- lower (* 60 overlap))))
+                                                              (+ (* 60 upper) (* 60 overlap) lower))))
+                                     (progn  (print (format "inside %s %s" day-append day-duration)) (+ day-append day-duration))
+                                   org-timeline-default-duration)))))
+        (when (eq time-of-day 'no-time)
+          (setq time-of-day 0000)
+          (setq duration org-timeline-default-duration)
+          ;; (message "day %s time %s duration %s marker %s" day time-of-day duration marker)
+          )
         (when (eq duration 'current-clock) (setq duration nil))
         (when (member type (list "past-scheduled" "scheduled" "clock" "timestamp"))
-          (when (and (numberp duration)
-                     (< duration 0))
-            (cl-incf duration 1440))
-          (unless duration (message "task without duration: %s" (buffer-substring (line-beginning-position) (line-end-position))))
-          (let* ((hour (/ time-of-day 100))
-                 (minute (mod time-of-day 100))
-                 (still-drawing t)
-                 (init-beg (+ (* hour 60) minute))
-                 (init-end (if duration
-                               (round (+ init-beg duration))
-                             (+ current-time (* 60 24 (- (time-to-days (current-time)) day)))))
-                 (beg (max init-beg start-offset))
-                 (duration (- init-end beg))
-
-                 (end (min init-end end-offset)))
-            (while (and (>= end start-offset)
-                        (<= beg end-offset)
-                        (or org-timeline-show-clocked
-                            (not (string= type "clock")))
-                        (<= day max-day)
-                        still-drawing)
-              (when (eq end (* 24 60)) (cl-incf end -1)) ; FIXME fixes a bug that shouldn't happen (crash when events end at midnight).
-              (push (make-org-timeline-task
-                     :id id
-                     :beg beg
-                     :end end
-                     :offset-beg (+ 5 (- (/ beg 10) (* 6 org-timeline-beginning-of-day-hour)))
-                     :offset-end (+ 5 (- (/ end 10) (* 6 org-timeline-beginning-of-day-hour)))
-                     :info (buffer-substring (line-beginning-position) (line-end-position))
-                     :line-in-agenda-buffer (line-number-at-pos)
-                     :face (org-timeline--get-face type)
-                     :day day
-                     :type type
-                     :text (org-timeline--get-block-text)
-                     :group-name (org-timeline--get-group-name type)
-                     :do-not-overlap-p (org-timeline--get-do-not-overlap type)
-                     :org-marker marker
-                     :org-hd-marker hd-marker
-                     )
-                    tasks)
-              (if (> init-end end-offset)
-                  (progn
-                    (cl-incf day)
-                    (cl-decf duration (- end beg))
-                    (setq init-beg 0)
-                    (setq beg (max init-beg start-offset))
-                    (setq init-end (+ beg duration))
-                    (setq end (min init-end end-offset)))
-                  (setq still-drawing nil))
-              (cl-incf id))))))
+          (when (numberp duration)
+            (when (and (< duration 0) (>= duration -1440))
+              (cl-incf duration 1440)))
+          (let ((tags (org-get-at-bol 'tags)))
+           (let* ((hour (/ time-of-day 100))
+                  (minute (mod time-of-day 100))
+                  (still-drawing t)
+                  (init-beg (+ (* hour 60) minute))
+                  (init-end (if duration
+                                (round (+ init-beg (max duration org-timeline-minimum-duration)))
+                              (max (+ current-time (* 60 24 (- (time-to-days (current-time)) day)))
+                                   (round (+ init-beg org-timeline-default-duration)))))
+                  (beg (max init-beg start-offset))
+                  (duration (- init-end beg))
+                  (end (min init-end end-offset)))
+             (while (and (>= end start-offset)
+                         (<= beg end-offset)
+                         (or org-timeline-show-clocked
+                             (not (string= type "clock")))
+                         (<= day max-day)
+                         still-drawing)
+               (when (eq end (* 24 60)) (cl-incf end -1)) ; FIXME fixes a bug that shouldn't happen (crash when events end at midnight).
+               ;; (message "hour %s minute %s beg %s duration %s end %s text %s" hour minute beg duration end (org-timeline--get-block-text))
+               (push (make-org-timeline-task
+                      :id id
+                      :beg beg
+                      :end end
+                      :offset-beg (+ 5 (- (/ beg 10) (* 6 org-timeline-beginning-of-day-hour)))
+                      :offset-end (+ 5 (- (/ end 10) (* 6 org-timeline-beginning-of-day-hour)))
+                      :info (buffer-substring (line-beginning-position) (line-end-position))
+                      :line-in-agenda-buffer (line-number-at-pos)
+                      :face (org-timeline--get-face type)
+                      :day day
+                      :type type
+                      :text (org-timeline--get-block-text)
+                      :group-name (org-timeline--get-group-name type)
+                      :do-not-overlap-p (org-timeline--get-do-not-overlap type)
+                      :org-marker marker
+                      :org-hd-marker hd-marker
+                      :tags tags
+                      )
+                     tasks)
+               (if (> init-end end-offset)
+                   (progn
+                     (cl-incf day)
+                     (cl-decf duration (- end beg))
+                     (setq init-beg 0)
+                     (setq beg (max init-beg start-offset))
+                     (setq init-end (+ beg duration))
+                     (setq end (min init-end end-offset)))
+                 (setq still-drawing nil))
+               (cl-incf id)))))))
     ;; find the next task
     (setq org-timeline-next-task nil)
     (dolist (task tasks)
@@ -501,7 +565,7 @@ WIN is the agenda buffer's window."
       (let ((threshold (if-let ((pval (alist-get org-timeline-emphasize-priority org-timeline-priority-matches)))
                            pval
                          org-timeline-emphasize-priority))
-            (value-matches (map 'list (lambda (c) (cons (cdr c) (car c))) org-timeline-priority-matches)))
+            (value-matches (mapcar (lambda (c) (cons (cdr c) (car c))) org-timeline-priority-matches)))
         (dolist (task tasks)
           (let ((curr-priority (when (string-match org-priority-regexp (org-timeline-task-info task))
                                  (org-get-priority (org-timeline-task-info task)))))
@@ -526,17 +590,27 @@ WIN is the agenda buffer's window."
     ;; change the foreground to be more readable
     (dolist (task tasks)
       (setf (org-timeline-task-face task) (concatenate 'list (org-timeline-task-face task) '(org-timeline-foreground))))
+    (dolist (task tasks)
+      (when-let ((filter-func (lambda (x)
+                                (let ((deprop x))
+                                  (set-text-properties 0 (length deprop) nil deprop)
+                                  (lax-plist-get org-timeline-tag-faces deprop))))
+                 (tag-names (seq-filter filter-func
+                                    (reverse (org-timeline-task-tags task))))
+                 (tag-faces (mapcar filter-func tag-names)))
+        (dolist (tag-face tag-faces)
+          (setf (org-timeline-task-face task) (cons tag-face (org-timeline-task-face task))))))
     (nreverse tasks)))
 
 (defun org-timeline--goto-block-position (task)
   "Go to TASK's block's line and position cursor in line...
 
 Return t if this task will overlap another one when inserted."
-  (let* ((slotline (org-timeline--add-elapsed-face org-timeline-slotline))
-         (offset-beg (org-timeline-task-offset-beg task))
+  (let* ((offset-beg (org-timeline-task-offset-beg task))
          (offset-end (org-timeline-task-offset-end task))
          (day (org-timeline-task-day task))
          (group-name (org-timeline-task-group-name task))
+         (slotline (org-timeline--add-elapsed-face org-timeline-slotline))
          (do-not-overlap (org-timeline-task-do-not-overlap-p task))
          (is-today (= day (time-to-days (current-time))))
          (today-face '(:inherit secondary-selection :weight bold :underline t :overline t)))
@@ -553,7 +627,7 @@ Return t if this task will overlap another one when inserted."
                                        (propertize (calendar-day-name (mod line-day 7) t t)
                                                    'face (if is-today today-face nil)) ; found in https://github.com/deopurkar/org-timeline
                                        " "
-                                       slotline
+                                       (org-timeline--add-elapsed-face slotline nil line-day)
                                        " "
                                        (propertize (calendar-date-string line-date t t)
                                                    'face (if is-today today-face nil)))
@@ -571,7 +645,7 @@ Return t if this task will overlap another one when inserted."
       (when (not (eq (line-end-position) (point-max))) (forward-line -1))
       (goto-char (line-end-position))
       (insert "\n"
-              (propertize (concat (propertize group-name 'face (when is-today today-face)) " " slotline)
+              (propertize (concat (propertize group-name 'face (when is-today today-face)) " " (org-timeline--add-elapsed-face slotline group-name))
                           'org-timeline-day day
                           'org-timeline-group-name group-name)))
     ;; cursor is now at beginning of the task's group's first line
@@ -583,14 +657,15 @@ Return t if this task will overlap another one when inserted."
         ;; (setq new-overlap-line-required-flag t)
         (forward-line)
         (setq new-overlap-line-required-flag (org-timeline--new-overlap-line-required-at-point-p task)))
-      (let ((decorated-slotline (propertize (concat "   " " " slotline)
+      (let ((decorated-slotline (propertize (concat "   " " " (org-timeline--add-elapsed-face slotline group-name))
                                             'org-timeline-day day
                                             'org-timeline-group-name group-name
                                             'org-timeline-occupied nil))
             (group-conflict (not (string= (-if-let (group-here (get-text-property (point) 'org-timeline-group-name)) group-here group-name) group-name))))
-        (when (or new-overlap-line-required-flag
-                  (and group-conflict
-                       (progn (forward-line -1) t)))
+        (when (or
+               (when group-conflict
+                 (forward-line -1))
+               new-overlap-line-required-flag)
           (end-of-line)
           (insert "\n" decorated-slotline))))
     ;; cursor is now placed on the right line, at the right position.
@@ -620,31 +695,51 @@ This does not take the block's context (e.g. overlap) into account."
                                                                  (with-local-quit
                                                                    (org-agenda-todo))
                                                                  (org-timeline--goto-block-position task)))))
-                                 (org-timeline-mouse-goto-task-in-file (lambda () (org-timeline--goto-block-position task) (org-timeline--goto-task-in-file))))
+                                 (org-timeline-mouse-goto-task-in-file (lambda () (org-timeline--goto-block-position task) (org-timeline--goto-task-in-file)))
+                                 (org-timeline-clock-in (lambda ()
+                                                          (interactive)
+                                                          (save-excursion
+                                                            (ignore-errors
+                                                              (goto-line (org-timeline-task-line-in-agenda-buffer task))
+                                                              (let ((inhibit-quit t))
+                                                                (with-local-quit
+                                                                  (org-agenda-clock-in))
+                                                                (org-timeline--goto-block-position task))))))
+                                 (org-timeline-agenda-redo (lambda ()
+                                                             (interactive)
+                                                             (let ((pos (point)))
+                                                               (goto-line org-timeline-first-line-in-agenda-buffer)
+                                                               (forward-line (- org-timeline-height 2))
+                                                               (unless (get-text-property (point) 'org-marker)
+                                                                 (message "hello there")
+                                                                 (beginning-of-buffer))
+                                                               (funcall-interactively #'org-agenda-redo)))))
                              (define-key x (kbd "<mouse-1>") #'org-timeline--move-to-task-in-agenda-buffer)
                              (define-key x (kbd "<return>") #'org-timeline--switch-to-task-in-file)
                              (define-key x (kbd "S-<return>") #'org-timeline--move-to-task-in-agenda-buffer)
                              (define-key x (kbd "<tab>") #'org-timeline--goto-task-in-file)
                              (define-key x (kbd "<mouse-2>") #'org-timeline-mouse-goto-task-in-file)
                              (define-key x (kbd "t") org-timeline-agenda-todo)
+                             (define-key x (kbd "I") org-timeline-clock-in)
+                             (define-key x (kbd "r") org-timeline-agenda-redo)
                              x))
          (block-length (- offset-end offset-beg))
-         (props (list 'font-lock-face face
-                      'org-timeline-occupied t
-                      'org-timeline-do-not-overlap do-not-overlap
-                      'org-timeline-task-id id
-                      'org-timeline-group-name group-name
-                      'mouse-face '(:highlight t :box t)
-                      'keymap move-to-task-map
-                      'task-info info
-                      'help-echo (lambda (w obj pos) ; called on block hover
-                                   (org-timeline--draw-new-info w info)
-                                   info)
-                      'cursor-sensor-functions (list #'org-timeline--cursor-sensor-functions)
-                      'org-timeline-task-line line
-                      'org-marker org-marker
-                      'org-hd-marker org-hd-marker
-                      ))
+         (props (list
+                 'org-timeline-occupied t
+                 'org-timeline-do-not-overlap do-not-overlap
+                 'org-timeline-task-id id
+                 'org-timeline-group-name group-name
+                 'mouse-face '(:inherit highlight :box t)
+                 'keymap move-to-task-map
+                 'task-info info
+                 'help-echo (lambda (w obj pos) ; called on block hover
+                              (org-timeline--draw-new-info w info)
+                              info)
+                 'cursor-sensor-functions (list #'org-timeline--cursor-sensor-functions)
+                 'org-timeline-task-line line
+                 'org-marker org-marker
+                 'org-hd-marker org-hd-marker
+                 ))
          (title (concat org-timeline-insert-before-text
                         (org-timeline-task-text task)
                         blank-block))
@@ -652,6 +747,10 @@ This does not take the block's context (e.g. overlap) into account."
                     title
                   blank-block)))
     (add-text-properties 0 block-length props block)
+    (add-text-properties 0 block-length (list 'font-lock-face (seq-filter (lambda (x) (not (functionp x))) face)) block)
+    (when-let ((functions (seq-filter #'functionp (reverse face))))
+        (dolist (func functions)
+          (setq block (funcall func block task))))
     (substring block 0 (+ block-length (- (apply #'+ (mapcar #'char-width org-timeline-insert-before-text)) (length org-timeline-insert-before-text))))))
 
 (defun org-timeline--make-and-insert-block (task)
@@ -667,11 +766,21 @@ Changes the block's face according to context."
     (when overlapp (setq block (propertize block 'font-lock-face (list 'org-timeline-overlap 'org-timeline-block 'org-timeline-foreground))))
     (when is-next (setq block (propertize block 'font-lock-face (list 'org-timeline-next-block 'org-timeline-block 'org-timeline-foreground))))
     (unless (get-text-property (- (point) 1) 'org-timeline-overline)
+      (setq block
+            (apply #'concat
+                   (mapcar (lambda (blo)
+                        (unless (= (length blo) 0)
+                          (setq blo (propertize blo
+                                       'font-lock-face (append '((:overline t)) (get-text-property 0 'font-lock-face blo)))))
+                        blo)
+                      (string-split block ""))))
       (add-text-properties 0 (length block)
-                           (list 'org-timeline-overline t
-                                 'font-lock-face (append (get-text-property 0 'font-lock-face block) '((:overline t)))
+                           (list
+                            'org-timeline-overline t
+                                 ;; 'font-lock-face (append (get-text-property 0 'font-lock-face block) '((:overline t)))
                                  'mouse-face (append (get-text-property 0 'mouse-face block) '((:overline t))))
-                           block))
+                           block)
+      )
     (setq block (substring block 0 (min (length block) (- (line-end-position) (point)))))
     (delete-char (length block))
     (insert block)))
