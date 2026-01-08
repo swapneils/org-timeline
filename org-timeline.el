@@ -640,7 +640,16 @@ WIN is the agenda buffer's window."
                  (tag-faces (mapcar filter-func tag-names)))
         (dolist (tag-face tag-faces)
           (setf (org-timeline-task-face task) (list tag-face (org-timeline-task-face task))))))
-    (nreverse tasks)))
+    ;; Sort tasks by day, then by start time within each day
+    (setq tasks (sort tasks (lambda (a b)
+                              (let ((day-a (org-timeline-task-day a))
+                                    (day-b (org-timeline-task-day b))
+                                    (beg-a (org-timeline-task-beg a))
+                                    (beg-b (org-timeline-task-beg b)))
+                                (if (= day-a day-b)
+                                    (< beg-a beg-b)
+                                  (< day-a day-b))))))
+    tasks))
 
 (defun org-timeline--goto-block-position (task)
   "Go to TASK's block's line and position cursor in line...
