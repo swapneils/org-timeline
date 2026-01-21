@@ -640,14 +640,27 @@ WIN is the agenda buffer's window."
                  (tag-faces (mapcar filter-func tag-names)))
         (dolist (tag-face tag-faces)
           (setf (org-timeline-task-face task) (list tag-face (org-timeline-task-face task))))))
-    ;; Sort tasks by day, then by start time within each day
+    ;; Sort tasks by day, then by start time within each day, with clock tasks last, then by priority
     (setq tasks (sort tasks (lambda (a b)
                               (let ((day-a (org-timeline-task-day a))
                                     (day-b (org-timeline-task-day b))
                                     (beg-a (org-timeline-task-beg a))
-                                    (beg-b (org-timeline-task-beg b)))
+                                    (beg-b (org-timeline-task-beg b))
+                                    (is-clock-a (equal (org-timeline-task-group-name a) (org-timeline--get-clock-prefix)))
+                                    (is-clock-b (equal (org-timeline-task-group-name b) (org-timeline--get-clock-prefix)))
+                                    (priority-a (when (string-match org-priority-regexp (org-timeline-task-info a))
+                                                  (org-get-priority (org-timeline-task-info a))))
+                                    (priority-b (when (string-match org-priority-regexp (org-timeline-task-info b))
+                                                  (org-get-priority (org-timeline-task-info b)))))
                                 (if (= day-a day-b)
-                                    (< beg-a beg-b)
+                                    (if (and is-clock-a (not is-clock-b))
+                                        nil  ; clock task goes after non-clock
+                                      (if (and (not is-clock-a) is-clock-b)
+                                          t    ; non-clock task goes before clock
+                                        (if (= beg-a beg-b)
+                                            ;; Same time: sort by priority (higher priority = higher number = earlier)
+                                            (> (or priority-a 0) (or priority-b 0))
+                                          (< beg-a beg-b))))  ; different times, sort by time
                                   (< day-a day-b))))))
     tasks))
 
